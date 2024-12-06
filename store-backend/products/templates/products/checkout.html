@@ -1,0 +1,61 @@
+<!-- File: products/templates/products/checkout.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Checkout</title>
+    <style>
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printableTable, #printableTable * {
+                visibility: visible;
+            }
+            #printableTable {
+                position: absolute;
+                left: 0;
+                top: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Checkout</h1>
+    {% if message %}
+        <p>{{ message }}</p>
+    {% endif %}
+    {% if cart %}
+        <table id="printableTable" border="1">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Price</th>
+                    <th>Description</th>
+                    <th>Main Image</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in cart %}
+                <tr>
+                    <td>{{ product.title }}</td>
+                    <td>{{ product.price }}</td>
+                    <td>{{ product.description }}</td>
+                    <td>
+                        {% if product.main_image %}
+                            <img src="{{ product.main_image.url }}" alt="{{ product.title }}" width="100">
+                        {% else %}
+                            No Image
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit">Confirm Checkout</button>
+        </form>
+    {% endif %}
+</body>
+</html>

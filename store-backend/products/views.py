@@ -1,60 +1,102 @@
-from rest_framework import viewsets 
+from django.shortcuts import render, get_object_or_404, redirect
 from .models import Product, ProductImage
-from .serializers import ProductImageSerializer, ProductSerializer
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from django.db import transaction
+from .forms import ProductForm  # moved form to a separate forms.py
+from django.http import HttpResponse
 
-# Create your views here.
+def login_view(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        if username == 'admin' and password == 'admin':
+            request.session['user_type'] = 'admin'
+            return redirect('product_list_admin')
+        else:
+            # any other username/password = 'user'
+            request.session['user_type'] = 'user'
+            return redirect('product_list')
+    return render(request, 'products/login.html')
 
-class ProductViewSet(viewsets.ModelViewSet): 
-    # Define queryset to include only available products
-    queryset = Product.objects.filter(available=True) 
-      
-    # Specify serializer to be used 
-    serializer_class = ProductSerializer 
+def logout_view(request):
+    request.session.flush()
+    return redirect('login')
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context.update({"request": self.request})
-        return context
+def require_login(func):
+    """Decorator to ensure the user is logged in at all."""
+    def wrapper(request, *args, **kwargs):
+        if 'user_type' not in request.session:
+            return redirect('login')
+        return func(request, *args, **kwargs)
+    return wrapper
 
-    def perform_create(self, serializer):
-        serializer.save()
+def require_admin(func):
+    """Decorator to ensure the user is an admin."""
+    def wrapper(request, *args, **kwargs):
+        if request.session.get('user_type') != 'admin':
+            return redirect('login')
+        return func(request, *args, **kwargs)
+    return wrapper
 
-    def perform_update(self, serializer):
-        serializer.save()
+@require_login
+def product_list(request):
+    # For end-user
+    # Only accessible if logged in (user or admin)
+    products = Product.objects.filter(available=True)
+    return render(request, 'products/product_list.html', {'products': products})
 
-    def create(self, request, *args, **kwargs):
-        response = super().create(request, *args, **kwargs)
-        return response
+@require_login
+def product_detail(request, pk):
+    product = get_object_or_404(Product, pk=pk, available=True)
+    return render(request, 'products/product_detail.html', {'product': product})
 
-    def update(self, request, *args, **kwargs):
-        response = super().update(request, *args, **kwargs)
-        return response
+@require_login
+def add_to_cart(request, pk):
+    product = get_object_or_404(Product, pk=pk, available=True)
+    cart = request.session.get('cart', [])
+    if product.id not in cart:
+        cart.append(product.id)
+        request.session['cart'] = cart
+    return redirect('product_list')
 
-@api_view(['POST'])
-@transaction.atomic
+@require_login
 def checkout(request):
-    cart = request.data.get('cart', [])
-    if not cart:
-        return Response({"message": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Process payment logic here (omitted for brevity)
-    
-    # After successful payment, mark products as unavailable
-    product_ids = [item['id'] for item in cart]
-    products = Product.objects.filter(id__in=product_ids, available=True)
-    products.update(available=False)
-    
-    return Response({"message": "Checkout successful"}, status=status.HTTP_200_OK)
+    cart = request.session.get('cart', [])
+    if request.method == 'POST':
+        if not cart:
+            return render(request, 'products/checkout.html', {'message': 'Cart is empty'})
+        Product.objects.filter(id__in=cart, available=True).update(available=False)
+        request.session['cart'] = []
+        return render(request, 'products/checkout.html', {'message': 'Checkout successful', 'cart': []})
+    products = Product.objects.filter(id__in=cart, available=True)
+    return render(request, 'products/checkout.html', {'cart': products})
 
-class ProductImageViewSet(viewsets.ModelViewSet):
-    queryset = ProductImage.objects.all()
-    serializer_class = ProductImageSerializer
+@require_admin
+def product_list_admin(request):
+    # Display all products, allow add, edit, delete
+    products = Product.objects.all()
+    if request.method == 'POST':
+        form = ProductForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            return redirect('product_list_admin')
+    else:
+        form = ProductForm()
+    return render(request, 'products/product_list_admin.html', {'products': products, 'form': form})
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context.update({"request": self.request})
-        return context
+@require_admin
+def product_edit(request, pk):
+    # Edit a product
+    product = get_object_or_404(Product, pk=pk)
+    if request.method == 'POST':
+        form = ProductForm(request.POST, request.FILES, instance=product)
+        if form.is_valid():
+            form.save()
+            return redirect('product_list_admin')
+    else:
+        form = ProductForm(instance=product)
+    return render(request, 'products/product_edit.html', {'form': form, 'product': product})
+
+@require_admin
+def product_delete(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    product.delete()
+    return redirect('product_list_admin')
