@@ -1,61 +1,57 @@
-<!-- File: products/templates/products/checkout.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Checkout</title>
-    <style>
-        @media print {
-            body * {
-                visibility: hidden;
-            }
-            #printableTable, #printableTable * {
-                visibility: visible;
-            }
-            #printableTable {
-                position: absolute;
-                left: 0;
-                top: 0;
-            }
-        }
-    </style>
-</head>
-<body>
-    <h1>Checkout</h1>
-    {% if message %}
-        <p>{{ message }}</p>
+{% extends 'products/base.html' %}
+{% block title %}Checkout{% endblock %}
+{% block content %}
+<h1 class="mb-4">Checkout</h1>
+
+{% if message %}
+    <div class="alert alert-info mb-4" role="alert">
+        {{ message }}
+    </div>
+{% endif %}
+
+{% if cart %}
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <h3 class="card-title mb-3">Shopping Cart</h3>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Price</th>
+                            <th>Description</th>
+                            <th>Main Image</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in cart %}
+                        <tr>
+                            <td>{{ product.title }}</td>
+                            <td>${{ product.price }}</td>
+                            <td>{{ product.description|truncatewords:10 }}</td>
+                            <td>
+                                {% if product.main_image %}
+                                    <img src="{{ product.main_image.url }}" alt="{{ product.title }}" class="img-fluid" style="max-height: 100px;">
+                                {% else %}
+                                    No Image
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <form method="post" class="mt-4">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success w-100">Confirm Checkout</button>
+            </form>
+        </div>
+    </div>
+{% else %}
+    {% if not message %}
+        <div class="alert alert-warning" role="alert">
+            Your cart is empty.
+        </div>
     {% endif %}
-    {% if cart %}
-        <table id="printableTable" border="1">
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Price</th>
-                    <th>Description</th>
-                    <th>Main Image</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in cart %}
-                <tr>
-                    <td>{{ product.title }}</td>
-                    <td>{{ product.price }}</td>
-                    <td>{{ product.description }}</td>
-                    <td>
-                        {% if product.main_image %}
-                            <img src="{{ product.main_image.url }}" alt="{{ product.title }}" width="100">
-                        {% else %}
-                            No Image
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <form method="post">
-            {% csrf_token %}
-            <button type="submit">Confirm Checkout</button>
-        </form>
-    {% endif %}
-</body>
-</html>
+{% endif %}
+{% endblock %}
